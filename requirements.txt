@@ -1,0 +1,4 @@
+PyQt6~=6.6.1
+cryptography~=42.0.2
+pandas~=2.2.0
+requests~=2.31.0
