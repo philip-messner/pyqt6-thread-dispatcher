@@ -1,26 +1,21 @@
 from PyQt6 import QtCore
-import requests
 
 import logging
-import typing
 import queue
 import datetime
 import enum
 
-from dispatcher import base_user
-from dispatcher import base_action, thread_action, session_action
+from dispatcher import base_action, thread_action
 from dispatcher import worker_signal
 from dispatcher import action_worker
-from dispatcher import queue_list_model
 from dispatcher import dispatcher_consts
+
 
 
 class ActionDispatcher(QtCore.QObject):
 
     logger = logging.getLogger('dispatcher')
 
-    signal_dispatcher_login_success = QtCore.pyqtSignal()
-    signal_dispatcher_login_failed = QtCore.pyqtSignal()
     signal_dispatcher_logged_out = QtCore.pyqtSignal()
     signal_dispatcher_ready = QtCore.pyqtSignal()
     signal_dispatcher_shutdown = QtCore.pyqtSignal()
@@ -54,12 +49,6 @@ class ActionDispatcher(QtCore.QObject):
         self.dispatcher_status: ActionDispatcher.DispatcherStatus = ActionDispatcher.DispatcherStatus.UNINT
         self.num_parallel_threads = kwargs.get('num_parallel_threads', dispatcher_consts.NUM_PARALLEL_THREADS)
 
-        # session related support
-        self.session: requests.Session = None
-        self.session_values: dict[str, typing.Any] = {}
-        self.session_key: str = None
-        self.usr: base_user.BaseUser = None
-
         # define queues
         self.immediate_queue = queue.PriorityQueue()
         self.demand_queue = queue.Queue()
@@ -83,64 +72,25 @@ class ActionDispatcher(QtCore.QObject):
     def get_num_parallel_threads(self):
         return self.parallel_thread_pool.maxThreadCount()
 
-    def get_session_cookies(self):
-        if self.session:
-            return requests.utils.dict_from_cookiejar(self.session.cookies)
-        else:
-            return {}
-
-    def set_session_value(self, entry_key: str, value: typing.Any):
-        self.session_values[entry_key] = value
-
-    def set_session_values(self, session_val_dict: dict[str, typing.Any]):
-        self.session_values = session_val_dict
-
-    def set_session_key(self, session_key: str):
-        self.session_key = session_key
-
-    def get_session_value(self, entry_key: str):
-        return self.session_values.get(entry_key, dispatcher_consts.CONMED_ATL_NULL)
-
-    @QtCore.pyqtSlot(session_action.LoginAction)
-    def start_dispatcher(self, login_action: session_action.LoginAction):
+    @QtCore.pyqtSlot()
+    def start_dispatcher(self):
         if self.dispatcher_status != ActionDispatcher.DispatcherStatus.IDLE and \
                 self.dispatcher_status != ActionDispatcher.DispatcherStatus.SHUTDOWN:
             self.logger.warning('Attempt was made to start dispatcher while in an invalid state.')
             return
         self.dispatcher_status = ActionDispatcher.DispatcherStatus.STARTING
-        # if there is an action to login a user, perform the login and set appropriate values
-        if not isinstance(login_action, session_action.LoginActionNone):
-            login_action.execute_action()
-            if not login_action.payload:
-                self.logger.warning('Login attemp failed.')
-                self.signal_dispatcher_login_failed.emit()
-                return
-            self.session = requests.Session()
-            self.session.cookies.update(login_action.payload)
-            self.set_session_values(login_action.get_session_values())
-            self.set_session_key(login_action.get_session_key())
-            self.usr = login_action.usr
-            login_action.tear_down()
-            self.signal_dispatcher_login_success.emit()
 
         self.launch_threads()
         self.dispatcher_status = ActionDispatcher.DispatcherStatus.READY
         self.signal_dispatcher_ready.emit()
 
-    @QtCore.pyqtSlot(session_action.LogoutAction)
-    def stop_dispatcher(self, logout_action: session_action.LogoutAction):
+    @QtCore.pyqtSlot()
+    def stop_dispatcher(self):
         if self.dispatcher_status != ActionDispatcher.DispatcherStatus.READY:
             self.logger.warning('Attempted to shutdown dispatcher in an invalid state.')
             return
         self.dispatcher_status = ActionDispatcher.DispatcherStatus.STOPPING
         self.kill_threads()
-        if not isinstance(logout_action, session_action.LogoutActionNone):
-            logout_action.execute_action()
-            if not logout_action.payload:
-                self.logger.warning('An error occurred while trying to logout.')
-            else:
-                self.logger.debug('User has been successfully logged out.')
-            self.signal_dispatcher_logged_out.emit()
 
         # clear the queues
         while not self.immediate_queue.empty():
@@ -162,9 +112,6 @@ class ActionDispatcher(QtCore.QObject):
                 continue
             self.series_queue.task_done()
 
-        self.session = None
-        self.session_values = {}
-        self.session_key = None
         self.dispatcher_status = ActionDispatcher.DispatcherStatus.SHUTDOWN
         self.signal_dispatcher_shutdown.emit()
 
@@ -279,10 +226,6 @@ class ActionDispatcher(QtCore.QObject):
 
     @QtCore.pyqtSlot(base_action.BaseAction)
     def dispatch_action(self, action: base_action.BaseAction):
-        action.set_user_info(self.usr)
-        action.set_session_values(self.session_values)
-        action.set_session_key(self.session_key)
-        action.set_session_cookies(self.get_session_cookies())
         action.tick('Idle', msg_only=True)
         child_actions: list[base_action.BaseAction] = action.dispatch()
         if child_actions:
@@ -379,6 +322,7 @@ class ActionDispatcher(QtCore.QObject):
             if action.action_status < dispatcher_consts.ActionStatus.IN_PROGRESS:
                 action.action_status = dispatcher_consts.ActionStatus.IN_PROGRESS
                 action.datetime_start = datetime.datetime.now()
+                action.signal_action_started.emit()
                 action.tick('Children Running', msg_only=True)
 
     @QtCore.pyqtSlot(int, base_action.BaseAction)
@@ -426,4 +370,3 @@ class ActionDispatcher(QtCore.QObject):
                     if action.follow_up_action:
                         self.dispatch_action(action.follow_up_action)
                         self.signal_dispatcher_created_action.emit(action.follow_up_action)
-

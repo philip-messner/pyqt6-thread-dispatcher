@@ -53,3 +53,9 @@ STD_ACTION_PRIORITY = 2
 # worker constants
 WORKER_WAIT_TIME = 0.5
 
+ACTION_STATUS_ROLE = QtCore.Qt.ItemDataRole.UserRole + 11
+ACTION_PROGRESS_ROLE = QtCore.Qt.ItemDataRole.UserRole + 12
+THREAD_STATUS_ROLE = QtCore.Qt.ItemDataRole.UserRole + 13
+ACTION_PENDING_ROLE = QtCore.Qt.ItemDataRole.UserRole + 14
+
+DF_INDEX_NAME = 'Index'

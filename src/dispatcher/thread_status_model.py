@@ -6,13 +6,17 @@ from dispatcher import dispatcher_consts
 
 class ThreadStatusModel(QtCore.QAbstractTableModel):
 
-    def __init__(self, thread_status_dict: dict[int, dispatcher_consts.ThreadStatus],
-                 thread_action_dict: dict[int, base_action.BaseAction], **kwargs):
-        parent = kwargs.get('parent', None)
+    def __init__(
+        self,
+        thread_status_dict: dict[int, dispatcher_consts.ThreadStatus],
+        thread_action_dict: dict[int, base_action.BaseAction],
+        **kwargs
+    ):
+        parent = kwargs.get("parent", None)
         super().__init__(parent=parent)
         self.thread_status_dict = thread_status_dict
         self.thread_action_dict = thread_action_dict
-        self._has_series_thread = kwargs.get('has_series_thread', True)
+        self._has_series_thread = kwargs.get("has_series_thread", True)
 
     def rowCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
         return len(self.thread_status_dict)
@@ -20,27 +24,33 @@ class ThreadStatusModel(QtCore.QAbstractTableModel):
     def columnCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
         return 3
 
-    def headerData(self, section: int, orientation: QtCore.Qt.Orientation, role: int = QtCore.Qt.ItemDataRole.DisplayRole) -> typing.Any:
+    def headerData(
+        self,
+        section: int,
+        orientation: QtCore.Qt.Orientation,
+        role: int = QtCore.Qt.ItemDataRole.DisplayRole,
+    ) -> typing.Any:
         if section < 0 or section >= len(self.thread_status_dict):
             return None
         if orientation != QtCore.Qt.Orientation.Horizontal:
             return None
         if role == QtCore.Qt.ItemDataRole.DisplayRole:
             if section == 0:
-                return 'Worker ID'
+                return "Worker ID"
             if section == 1:
-                return 'Status'
+                return "Status"
             if section == 2:
-                return 'Current Action'
+                return "Current Action"
         if role == QtCore.Qt.ItemDataRole.TextAlignmentRole:
             return QtCore.Qt.AlignmentFlag.AlignCenter
 
         return None
 
-    def data(self, index: QtCore.QModelIndex, role: int = QtCore.Qt.ItemDataRole.DisplayRole) -> typing.Any:
+    def data(
+        self, index: QtCore.QModelIndex, role: int = QtCore.Qt.ItemDataRole.DisplayRole
+    ) -> typing.Any:
         if not index.isValid():
             return None
-
 
         worker_id = list(self.thread_status_dict.keys())[index.row()]
 
@@ -52,7 +62,7 @@ class ThreadStatusModel(QtCore.QAbstractTableModel):
             elif index.column() == 2:
                 action = self.thread_action_dict.get(worker_id, None)
                 if not action:
-                    return ''
+                    return ""
                 return action.short_description
             return None
 
@@ -103,9 +113,13 @@ class ThreadStatusDelegate(QtWidgets.QStyledItemDelegate):
         painter.save()
         status = index.data(role=dispatcher_consts.THREAD_STATUS_ROLE)
         if status is not None:
-            color = dispatcher_consts.THREAD_STATUS_COLORS.get(status, QtGui.QColor('#ff3838'))
+            color = dispatcher_consts.THREAD_STATUS_COLORS.get(
+                status, QtGui.QColor("#ff3838")
+            )
             painter.setBrush(color)
-            painter.drawEllipse(option.rect.center(), self.CIRCLE_SIZE, self.CIRCLE_SIZE)
+            painter.drawEllipse(
+                option.rect.center(), self.CIRCLE_SIZE, self.CIRCLE_SIZE
+            )
 
         painter.restore()
 
@@ -113,19 +127,28 @@ class ThreadStatusDelegate(QtWidgets.QStyledItemDelegate):
 class CircleStatusWidget(QtWidgets.QWidget):
 
     BUFFER_SPACE = 10
-    RADIUS = 14
+    MAX_RADIUS = 10
 
     def __init__(self, num_threads, parent=None):
         super().__init__(parent)
         # self.resize(293, 20)
         self.num_threads = num_threads
-        self.status = [dispatcher_consts.THREAD_STATUS_COLORS[dispatcher_consts.ThreadStatus.UNINIT] for _ in range(num_threads)]
+        self.status = [
+            dispatcher_consts.THREAD_STATUS_COLORS[
+                dispatcher_consts.ThreadStatus.UNINIT
+            ]
+            for _ in range(num_threads)
+        ]
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
-        # radius = min((self.width() - ((self.num_threads - 1) * self.BUFFER_SPACE)) // (2 * self.num_threads),
-        #              self.height() // 2) - self.TWEAK_VAL
-        radius = self.RADIUS
+        radius = min(
+            (self.width() - ((self.num_threads - 1) * self.BUFFER_SPACE))
+            // (2 * self.num_threads),
+            self.height() // 2,
+        )
+        if radius > self.MAX_RADIUS:
+            radius = self.MAX_RADIUS
         for i in range(self.num_threads):
             color = self.status[i]
             painter.setBrush(QtGui.QColor(color))
@@ -136,10 +159,18 @@ class CircleStatusWidget(QtWidgets.QWidget):
         # print(radius)
 
     def minimumSizeHint(self) -> QtCore.QSize:
-        return QtCore.QSize((self.RADIUS * 2 * self.num_threads) + (self.BUFFER_SPACE * self.num_threads), 30)
+        return QtCore.QSize(
+            (self.MAX_RADIUS * 2 * self.num_threads)
+            + (self.BUFFER_SPACE * self.num_threads),
+            30,
+        )
 
     def sizeHint(self) -> QtCore.QSize:
-        return QtCore.QSize((self.RADIUS * 2 * self.num_threads) + (self.BUFFER_SPACE * self.num_threads), 30)
+        return QtCore.QSize(
+            (self.MAX_RADIUS * 2 * self.num_threads)
+            + (self.BUFFER_SPACE * self.num_threads),
+            30,
+        )
 
     def set_status(self, thread_num, color):
         self.status[thread_num] = color
@@ -148,27 +179,40 @@ class CircleStatusWidget(QtWidgets.QWidget):
 
 class ThreadStatusWidget(QtWidgets.QWidget):
 
-    def __init__(self, num_parallel_threads: int, thread_status_dict: dict[int, dispatcher_consts.ThreadStatus], **kwargs):
-        parent = kwargs.get('parent', None)
+    def __init__(
+        self,
+        num_parallel_threads: int,
+        thread_status_dict: dict[int, dispatcher_consts.ThreadStatus],
+        **kwargs
+    ):
+        parent = kwargs.get("parent", None)
         super().__init__(parent=parent)
-        self.flag_series_thread_enabled = kwargs.get('series_thread_enabled', True)
-        self.parallel_status_widget = CircleStatusWidget(num_parallel_threads, parent=self)
+        self.flag_series_thread_enabled = kwargs.get("series_thread_enabled", True)
+        self.parallel_status_widget = CircleStatusWidget(
+            num_parallel_threads, parent=self
+        )
         self.series_status_widget = CircleStatusWidget(1, parent=self)
-        self.lbl_status = QtWidgets.QLabel('Thread Status: ', self)
+        self.lbl_status = QtWidgets.QLabel("Thread Status: ", self)
         self.thread_status_dict = thread_status_dict
-        self.btn_thread_view = QtWidgets.QPushButton('Open View', self)
+        self.btn_thread_view = QtWidgets.QPushButton("Open View", self)
         main_layout = QtWidgets.QHBoxLayout(self)
         main_layout.setContentsMargins(1, 1, 1, 1)
         main_layout.setSpacing(5)
         main_layout.addWidget(self.lbl_status, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(self.parallel_status_widget, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(
+            self.parallel_status_widget, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
         if self.flag_series_thread_enabled:
             line_seperator = QtWidgets.QFrame(self)
             line_seperator.setFrameShape(QtWidgets.QFrame.Shape.VLine)
             line_seperator.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
             main_layout.addWidget(line_seperator, 0)
-            main_layout.addWidget(self.series_status_widget, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(self.btn_thread_view, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
+            main_layout.addWidget(
+                self.series_status_widget, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+            )
+        main_layout.addWidget(
+            self.btn_thread_view, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
         self.setLayout(main_layout)
 
     @QtCore.pyqtSlot(int)
@@ -178,7 +222,10 @@ class ThreadStatusWidget(QtWidgets.QWidget):
         thread_dict_idx = list(self.thread_status_dict.keys()).index(thread_id)
         status = self.thread_status_dict[thread_id]
         color = dispatcher_consts.THREAD_STATUS_COLORS[status]
-        if self.flag_series_thread_enabled and thread_dict_idx == len(self.thread_status_dict) - 1:
+        if (
+            self.flag_series_thread_enabled
+            and thread_dict_idx == len(self.thread_status_dict) - 1
+        ):
             self.series_status_widget.set_status(0, color)
         else:
             self.parallel_status_widget.set_status(thread_dict_idx, color)
