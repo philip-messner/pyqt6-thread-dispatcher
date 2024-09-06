@@ -40,12 +40,25 @@ class SessionAction(base_action.BaseAction):
         if session_cookies:
             self.session.cookies.update(session_cookies)
 
+    def login(self):
+        raise NotImplementedError('You cannot login from a generic session action.')
+
+    def logout(self):
+        raise NotImplementedError('You cannot logout from a generic session action.')
+
     def tear_down(self):
         self.session.close()
         self.session = None
         self.session_values.clear()
         self.session_key = None
         super().tear_down()
+
+    def execute_action(self):
+        self.setup()
+        self.login()
+        self.do_work()
+        self.logout()
+        self.tear_down()
 
     def set_session_cookies(self, session_cookies: dict[str, typing.Any]):
         if not session_cookies:
